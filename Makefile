@@ -45,8 +45,9 @@ CFLAGS += -DSTM32F407xx
 CFLAGS += $(INCS)
 
 LDFLAGS  = -mcpu=$(MCU) -mthumb -mfpu=$(FPU) -mfloat-abi=$(FLOAT)
-LDFLAGS += -TSTM32F407VGTx_FLASH.ld
+LDFLAGS += -T STM32F407VGTx_FLASH.ld
 LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,--no-warn-rwx-segments
 LDFLAGS += -Wl,-Map=$(TARGET).map
 LDFLAGS += -lm
 LDFLAGS += --specs=nano.specs
