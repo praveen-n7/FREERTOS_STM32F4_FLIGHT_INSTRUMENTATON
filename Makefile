@@ -1,89 +1,105 @@
-TARGET  = freertos_project
-MCU     = cortex-m4
-FPU     = fpv4-sp-d16
-FLOAT   = hard
+##############################################################################
+# Makefile - STM32-Flight-Controller-FreeRTOS
+# Target: STM32F407VG (STM32F407G-DISC1 Discovery board)
+# Toolchain: arm-none-eabi-gcc
+##############################################################################
 
-CC      = arm-none-eabi-gcc
-OBJCOPY = arm-none-eabi-objcopy
-SIZE    = arm-none-eabi-size
+TARGET   = flight_controller
+BUILDDIR = build
 
-SRC_DIR      = src
-FREERTOS_DIR = FreeRTOS/Source
+# ---- Toolchain ----
+PREFIX   = arm-none-eabi-
+CC       = $(PREFIX)gcc
+AS       = $(PREFIX)gcc -x assembler-with-cpp
+OBJCOPY  = $(PREFIX)objcopy
+SIZE     = $(PREFIX)size
 
-SRCS = \
-	$(SRC_DIR)/main.c \
-	$(SRC_DIR)/sensor_task.c \
-	$(SRC_DIR)/processing_task.c \
-	$(SRC_DIR)/display_task.c \
-	$(SRC_DIR)/priority_inversion_demo.c \
-	$(SRC_DIR)/ssd1306.c \
-	$(SRC_DIR)/uart.c \
-	$(SRC_DIR)/i2c.c \
-	$(SRC_DIR)/mpu6050.c \
-	$(FREERTOS_DIR)/tasks.c \
-	$(FREERTOS_DIR)/queue.c \
-	$(FREERTOS_DIR)/list.c \
-	$(FREERTOS_DIR)/timers.c \
-	$(FREERTOS_DIR)/event_groups.c \
-	$(FREERTOS_DIR)/stream_buffer.c \
-	$(FREERTOS_DIR)/portable/GCC/ARM_CM4F/port.c \
-	$(FREERTOS_DIR)/portable/MemMang/heap_4.c
+# ---- MCU / FPU ----
+MCU_FLAGS = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
-INCS = \
-	-I. \
-	-I$(SRC_DIR) \
-	-I$(FREERTOS_DIR)/include \
-	-I$(FREERTOS_DIR)/portable/GCC/ARM_CM4F \
-	-ICMSIS/Include \
-	-ICMSIS/Device/ST/STM32F4xx/Include
+# ---- Defines ----
+DEFS = -DSTM32F407xx -DHSE_VALUE=8000000U
 
-CFLAGS  = -mcpu=$(MCU) -mthumb -mfpu=$(FPU) -mfloat-abi=$(FLOAT)
-CFLAGS += -O2 -g3
-CFLAGS += -Wall -Wextra -Wno-unused-parameter
-CFLAGS += -ffunction-sections -fdata-sections
-CFLAGS += -DSTM32F407xx
-CFLAGS += $(INCS)
+# ---- Include paths ----
+INCLUDES = \
+  -ICore/Inc \
+  -IDrivers/CMSIS/Include \
+  -IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
+  -IThird_Party/FreeRTOS/include \
+  -IThird_Party/FreeRTOS/portable/GCC/ARM_CM4F
 
-LDFLAGS  = -mcpu=$(MCU) -mthumb -mfpu=$(FPU) -mfloat-abi=$(FLOAT)
-LDFLAGS += -T STM32F407VGTx_FLASH.ld
-LDFLAGS += -Wl,--gc-sections
-LDFLAGS += -Wl,--no-warn-rwx-segments
-LDFLAGS += -Wl,-Map=$(TARGET).map
-LDFLAGS += -lm
-LDFLAGS += --specs=nano.specs
-LDFLAGS += --specs=nosys.specs
+# ---- Sources ----
+C_SOURCES = \
+  Core/Src/main.c \
+  Core/Src/delay.c \
+  Core/Src/ssd1306.c \
+  Core/Src/stm32f4xx_it.c \
+  Core/Src/syscalls.c \
+  Core/Src/sysmem.c \
+  Core/Src/system_stm32f4xx.c \
+  Core/Src/flight_core.c \
+  Core/Src/board/board_init.c \
+  Core/Src/board/system_clock.c \
+  Core/Src/drivers/bmp280.c \
+  Core/Src/drivers/i2c_bus.c \
+  Core/Src/drivers/mpu6050.c \
+  Third_Party/FreeRTOS/croutine.c \
+  Third_Party/FreeRTOS/event_groups.c \
+  Third_Party/FreeRTOS/list.c \
+  Third_Party/FreeRTOS/queue.c \
+  Third_Party/FreeRTOS/stream_buffer.c \
+  Third_Party/FreeRTOS/tasks.c \
+  Third_Party/FreeRTOS/timers.c \
+  Third_Party/FreeRTOS/portable/GCC/ARM_CM4F/port.c \
+  Third_Party/FreeRTOS/portable/MemMang/heap_4.c
 
-C_SRCS      = $(filter %.c, $(SRCS))
-OBJS        = $(C_SRCS:.c=.o)
-STARTUP_OBJ = $(SRC_DIR)/startup_stm32f407.o
+ASM_SOURCES = Core/Startup/startup_stm32f407xx.s
 
-all: $(TARGET).elf $(TARGET).bin size
+LDSCRIPT = STM32F407VGTX_FLASH.ld
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# ---- Flags ----
+CFLAGS  = $(MCU_FLAGS) $(DEFS) $(INCLUDES) -O2 -g3 -std=gnu11 -Wall \
+          -ffunction-sections -fdata-sections -fno-strict-aliasing
+ASFLAGS = $(MCU_FLAGS) -g3
+LDFLAGS = $(MCU_FLAGS) -specs=nano.specs -u _printf_float \
+          -T$(LDSCRIPT) \
+          -Wl,-Map=$(BUILDDIR)/$(TARGET).map \
+          -Wl,--gc-sections \
+          -lc -lm -lnosys
 
-$(STARTUP_OBJ): $(SRC_DIR)/startup_stm32f407.s
-	$(CC) $(CFLAGS) -c $< -o $@
+OBJECTS = $(addprefix $(BUILDDIR)/,$(notdir $(C_SOURCES:.c=.o)))
+OBJECTS += $(addprefix $(BUILDDIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
+vpath %.c $(sort $(dir $(C_SOURCES)))
+vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
-$(TARGET).elf: $(OBJS) $(STARTUP_OBJ)
-	$(CC) $(OBJS) $(STARTUP_OBJ) $(LDFLAGS) -o $@
+.PHONY: all clean flash
 
-$(TARGET).bin: $(TARGET).elf
-	$(OBJCOPY) -O binary $< $@
+all: $(BUILDDIR)/$(TARGET).elf $(BUILDDIR)/$(TARGET).hex $(BUILDDIR)/$(TARGET).bin
+	$(SIZE) $(BUILDDIR)/$(TARGET).elf
 
-size: $(TARGET).elf
-	$(SIZE) $(TARGET).elf
+$(BUILDDIR)/%.o: %.c Makefile | $(BUILDDIR)
+	$(CC) -c $(CFLAGS) $< -o $@
 
-flash: $(TARGET).bin
-	openocd -f interface/stlink.cfg \
-	        -f target/stm32f4x.cfg \
-	        -c "program $(TARGET).bin 0x08000000 verify reset exit"
+$(BUILDDIR)/%.o: %.s Makefile | $(BUILDDIR)
+	$(AS) -c $(ASFLAGS) $< -o $@
+
+$(BUILDDIR)/$(TARGET).elf: $(OBJECTS)
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+
+$(BUILDDIR)/%.hex: $(BUILDDIR)/%.elf
+	$(OBJCOPY) -O ihex $< $@
+
+$(BUILDDIR)/%.bin: $(BUILDDIR)/%.elf
+	$(OBJCOPY) -O binary -S $< $@
+
+$(BUILDDIR):
+	mkdir -p $(BUILDDIR)
 
 clean:
-	find . -name "*.o" -delete
-	find . -name "*.elf" -delete
-	find . -name "*.bin" -delete
-	find . -name "*.map" -delete
-	@echo "Clean complete"
+	rm -rf $(BUILDDIR)
 
-.PHONY: all flash clean size
+
+flash: $(BUILDDIR)/$(TARGET).elf
+	openocd -f interface/stlink.cfg \
+	        -f target/stm32f4x.cfg \
+	        -c "program $< verify reset exit"

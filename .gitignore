@@ -1,0 +1,35 @@
+# Build output
+build/
+
+# Object and dependency files
+*.o
+*.d
+*.su
+
+# Executables and firmware
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# Static libraries
+*.a
+
+# Debug/log files
+*.log
+
+# VS Code
+.vscode/
+
+# Eclipse / STM32CubeIDE
+.settings/
+.project
+.cproject
+
+# Temporary files
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db
